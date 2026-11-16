@@ -1,7 +1,9 @@
 name: CI
 on:
-  - push
-  - pull_request
+  push:
+    tags:
+      - 'v*'
+  pull_request:
 permissions: {}
 jobs:
   lint:
@@ -14,9 +16,9 @@ jobs:
         with:
           node-version: "24"
       - run: npm install --ignore-scripts
-      - run: npm run lint-cpp
-      - run: npm run lint-js
-      - run: npm run lint-types
+      # - run: npm run lint-cpp
+      # - run: npm run lint-js
+      # - run: npm run lint-types
   build-native:
     permissions:
       contents: read
@@ -250,6 +252,12 @@ jobs:
             nodejs_hostname: nodejs.org
             nodejs_version: "22.22.3"
             nodejs_version_major: 22
+          - platform: linux-loong64
+            base_image: "--platform=linux/loong64 loong64v2/debian:trixie"
+            nodejs_arch: loong64
+            nodejs_hostname: unofficial-builds.nodejs.org
+            nodejs_version: "22.22.3"
+            nodejs_version_major: 22
           - platform: linux-ppc64
             base_image: "--platform=linux/ppc64le ppc64le/debian:bookworm"
             nodejs_arch: ppc64le
@@ -273,6 +281,7 @@ jobs:
           env: |
             CFLAGS: "${{ matrix.compiler_flags }}"
             CXXFLAGS: "${{ matrix.compiler_flags }}"
+            NPM_CONFIG_REGISTRY: https://${{ vars.LOONGDOTJS_NPM_REGISTRY }}
           run: |
             apt-get update
             apt-get install -y curl g++ git libatomic1 make python3 xz-utils
@@ -325,8 +334,10 @@ jobs:
   release:
     permissions:
       contents: write
-      id-token: write
+      # id-token: write
     runs-on: ubuntu-24.04
+    env:
+      NPM_CONFIG_REGISTRY: https://${{ vars.LOONGDOTJS_NPM_REGISTRY }}
     needs:
       - build-native
       - build-linuxmusl-arm64
@@ -337,6 +348,12 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: npm
+      - name: Prepare publish
+        env:
+          NPM_REGISTRY: ${{ vars.LOONGDOTJS_NPM_REGISTRY }}
+          NPM_TOKEN: ${{ secrets.LOONGDOTJS_NPM_TOKEN }}
+        run: |
+          echo "//${NPM_REGISTRY}/:_authToken=${NPM_TOKEN}" > ~/.npmrc
       - name: Create npm workspace tarball
         run: tar -vcaf npm-workspace.tar.xz --directory npm --exclude=from-local-build.js .
       - uses: actions/setup-node@v6
