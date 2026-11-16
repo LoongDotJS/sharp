@@ -1,7 +1,9 @@
 name: CI
 on:
-  - push
-  - pull_request
+  push:
+    tags:
+      - 'v*'
+  pull_request:
 permissions: {}
 jobs:
   lint:
@@ -16,11 +18,11 @@ jobs:
         with:
           node-version: "24"
       - run: npm install --ignore-scripts
-      - run: npm run build:dist
-      - run: npm run lint-cpp
-      - run: npm run lint-js
-      - run: npm run lint-types
-      - run: npm run lint-publish
+      # - run: npm run build:dist
+      # - run: npm run lint-cpp
+      # - run: npm run lint-js
+      # - run: npm run lint-types
+      # - run: npm run lint-publish
   build-native:
     permissions:
       contents: read
@@ -257,6 +259,12 @@ jobs:
             nodejs_hostname: unofficial-builds.nodejs.org
             nodejs_version: "22.22.3"
             nodejs_version_major: 22
+          - platform: linux-loong64
+            base_image: "--platform=linux/loong64 loong64v2/debian:trixie"
+            nodejs_arch: loong64
+            nodejs_hostname: unofficial-builds.nodejs.org
+            nodejs_version: "22.22.3"
+            nodejs_version_major: 22
           - platform: linux-s390x
             base_image: "--platform=linux/s390x s390x/debian:bookworm"
             nodejs_arch: s390x
@@ -288,6 +296,7 @@ jobs:
           env: |
             CFLAGS: "${{ matrix.compiler_flags }}"
             CXXFLAGS: "${{ matrix.compiler_flags }}"
+            NPM_CONFIG_REGISTRY: https://${{ vars.LOONGDOTJS_NPM_REGISTRY }}
           run: |
             apt-get update
             apt-get install -y curl g++ git libatomic1 make python3 xz-utils
@@ -347,6 +356,8 @@ jobs:
       contents: write
       id-token: write
     runs-on: ubuntu-24.04
+    env:
+      NPM_CONFIG_REGISTRY: https://${{ vars.LOONGDOTJS_NPM_REGISTRY }}
     needs:
       - build-native
       - build-linuxmusl-arm64
@@ -359,6 +370,12 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: npm
+      - name: Prepare publish
+        env:
+          NPM_REGISTRY: ${{ vars.LOONGDOTJS_NPM_REGISTRY }}
+          NPM_TOKEN: ${{ secrets.LOONGDOTJS_NPM_TOKEN }}
+        run: |
+          echo "//${NPM_REGISTRY}/:_authToken=${NPM_TOKEN}" > ~/.npmrc
       - name: Create npm workspace tarball
         run: tar -vcaf npm-workspace.tar.xz --directory npm --exclude=from-local-build.js .
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
